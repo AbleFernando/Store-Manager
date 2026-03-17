@@ -10,6 +10,7 @@ export class DataService {
 
   // Auth State
   currentUser = signal<User | null>(null);
+  currentSessionSignal = signal<CashierSession | null>(null);
 
   // Mock Data Storage
   private mockUsers: User[] = [
@@ -79,6 +80,10 @@ export class DataService {
 
     const savedConfig = localStorage.getItem('mock_config');
     if (savedConfig) this.mockConfig = JSON.parse(savedConfig);
+
+    // Initial session state
+    const openSession = this.mockSessions.find(s => s.status === 'open') || null;
+    this.currentSessionSignal.set(openSession);
 
     // Default current user for dev
     this.currentUser.set(this.mockUsers[0]);
@@ -191,6 +196,7 @@ export class DataService {
       status: 'open'
     };
     this.mockSessions.push(newSession);
+    this.currentSessionSignal.set(newSession);
     this.persist();
     return newSession;
   }
@@ -201,6 +207,21 @@ export class DataService {
       session.status = 'closed';
       session.closing_balance = closingBalance;
       session.closed_at = new Date().toISOString();
+      
+      // Create income transaction for the sales in this session
+      const sales = await this.getSalesBySession(sessionId);
+      const totalSales = sales.reduce((acc, s) => acc + s.total_amount, 0);
+      
+      if (totalSales > 0) {
+        await this.saveTransaction({
+          type: 'income',
+          description: `Fechamento de Caixa - Sessão ${sessionId.slice(0, 8)}`,
+          amount: totalSales,
+          category: 'Vendas'
+        });
+      }
+      
+      this.currentSessionSignal.set(null);
       this.persist();
     }
     return session as CashierSession;
@@ -247,7 +268,7 @@ export class DataService {
 
   // Financial
   async getTransactions() {
-    return this.mockTransactions;
+    return [...this.mockTransactions];
   }
 
   async saveTransaction(transaction: Partial<FinancialTransaction>) {

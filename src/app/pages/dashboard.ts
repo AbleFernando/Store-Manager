@@ -124,17 +124,37 @@ export class Dashboard implements OnInit {
       const products = await this.dataService.getProducts();
       this.lowStockProducts.set(products.filter(p => p.stock_quantity <= p.min_stock).slice(0, 5));
       
-      // Update stats with real data
-      this.stats.update(s => {
-        s[1].value = products.length.toString();
-        return [...s];
-      });
-
       const customers = await this.dataService.getCustomers();
-      this.stats.update(s => {
-        s[2].value = customers.length.toString();
-        return [...s];
-      });
+      const allSales = await this.dataService.getAllSales();
+      
+      // Daily Sales
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todaySales = allSales.filter(s => s.created_at.startsWith(todayStr));
+      const totalDailySales = todaySales.reduce((acc, s) => acc + s.total_amount, 0);
+      
+      // Recent Sales
+      this.recentSales.set(allSales.slice(0, 5));
+
+      // Cash Balance
+      const currentSession = await this.dataService.getCurrentSession();
+      let cashBalance = 0;
+      let sessionStatus = 'Fechado';
+      let trendClass = 'bg-black/5 text-black/50';
+      
+      if (currentSession) {
+        const sessionSales = await this.dataService.getSalesBySession(currentSession.id);
+        const totalSessionSales = sessionSales.reduce((acc, s) => acc + s.total_amount, 0);
+        cashBalance = currentSession.opening_balance + totalSessionSales;
+        sessionStatus = 'Aberto';
+        trendClass = 'bg-green-100 text-green-600';
+      }
+
+      this.stats.set([
+        { label: 'Vendas Hoje', value: `R$ ${totalDailySales.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: 'shopping-cart', trend: `+${todaySales.length}`, trendClass: 'bg-green-100 text-green-600' },
+        { label: 'Produtos', value: products.length.toString(), icon: 'package', trend: 'Estável', trendClass: 'bg-black/5 text-black/50' },
+        { label: 'Clientes', value: customers.length.toString(), icon: 'users', trend: 'Total', trendClass: 'bg-black/5 text-black/50' },
+        { label: 'Saldo Caixa', value: `R$ ${cashBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: 'wallet', trend: sessionStatus, trendClass: trendClass },
+      ]);
 
     } catch (err) {
       console.error('Error loading dashboard data', err);

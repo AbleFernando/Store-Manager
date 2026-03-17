@@ -75,8 +75,10 @@ import { SystemConfig } from '../models';
           
           <div class="flex items-center gap-4">
             <div class="text-right hidden sm:block">
-              <p class="text-xs text-black/50 font-medium uppercase tracking-wider">Caixa Aberto</p>
-              <p class="text-sm font-bold">R$ 1.250,00</p>
+              <p class="text-xs text-black/50 font-medium uppercase tracking-wider">
+                {{ currentSession() ? 'Caixa Aberto' : 'Caixa Fechado' }}
+              </p>
+              <p class="text-sm font-bold">R$ {{ sessionBalance() | number:'1.2-2' }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-black/5 border border-black/5 flex items-center justify-center">
               <lucide-icon name="users" class="w-5 h-5 opacity-50"></lucide-icon>
@@ -102,6 +104,8 @@ export class Layout implements OnInit {
   private dataService = inject(DataService);
 
   config = signal<SystemConfig | null>(null);
+  currentSession = this.dataService.currentSessionSignal;
+  sessionBalance = signal<number>(0);
 
   navItems = [
     { path: '/dashboard', icon: 'layout-dashboard', label: 'Dashboard', roles: ['super_admin', 'admin', 'supervisor'] },
@@ -117,6 +121,18 @@ export class Layout implements OnInit {
   async ngOnInit() {
     const c = await this.dataService.getConfig();
     this.config.set(c);
+    
+    // Initial balance
+    const s = this.currentSession();
+    if (s) {
+      this.updateSessionBalance(s.id, s.opening_balance);
+    }
+  }
+
+  async updateSessionBalance(sessionId: string, opening: number) {
+    const sales = await this.dataService.getSalesBySession(sessionId);
+    const total = sales.reduce((acc, s) => acc + s.total_amount, 0);
+    this.sessionBalance.set(opening + total);
   }
 
   filteredNavItems() {
