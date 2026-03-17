@@ -61,8 +61,12 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
                 <tr class="hover:bg-black/[0.02] transition-colors group">
                   <td class="px-6 py-4">
                     <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-xl bg-black/5 flex items-center justify-center shrink-0">
-                        <lucide-icon name="package" class="w-5 h-5 opacity-40"></lucide-icon>
+                      <div class="w-10 h-10 rounded-xl bg-black/5 flex items-center justify-center shrink-0 overflow-hidden">
+                        @if (product.image_url) {
+                          <img [src]="product.image_url" [alt]="product.name" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                        } @else {
+                          <lucide-icon name="package" class="w-5 h-5 opacity-40"></lucide-icon>
+                        }
                       </div>
                       <div>
                         <p class="text-sm font-bold">{{ product.name }}</p>
@@ -115,39 +119,72 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
             </div>
             
             <form [formGroup]="productForm" (ngSubmit)="saveProduct()" class="p-6 space-y-6">
-              <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-2">
-                  <label for="prod-name" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Nome do Produto</label>
-                  <input id="prod-name" type="text" formControlName="name" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                </div>
-                <div>
-                  <label for="prod-barcode" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Código de Barras</label>
-                  <input id="prod-barcode" type="text" formControlName="barcode" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                </div>
-                <div>
-                  <label for="prod-category" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Categoria</label>
-                  <select id="prod-category" formControlName="category_id" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                    <option value="">Selecione...</option>
-                    @for (cat of categories(); track cat.id) {
-                      <option [value]="cat.id">{{ cat.name }}</option>
+              <div class="grid grid-cols-3 gap-6">
+                <!-- Image Upload -->
+                <div class="col-span-1">
+                  <span class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Foto do Produto</span>
+                  <button 
+                    type="button"
+                    (click)="fileInput.click()"
+                    class="w-full aspect-square rounded-2xl border-2 border-dashed border-black/10 hover:border-black/20 transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center bg-[#F9F9F9] relative group"
+                  >
+                    @if (productForm.value.image_url) {
+                      <img [src]="productForm.value.image_url" alt="Preview do produto" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <lucide-icon name="camera" class="text-white w-6 h-6"></lucide-icon>
+                      </div>
+                    } @else {
+                      <lucide-icon name="camera" class="w-8 h-8 text-black/20 mb-2"></lucide-icon>
+                      <span class="text-[10px] font-bold text-black/40 uppercase tracking-wider">Upload</span>
                     }
-                  </select>
+                    <input #fileInput type="file" class="hidden" accept="image/*" (change)="onFileSelected($event)">
+                  </button>
+                  @if (productForm.value.image_url) {
+                    <button 
+                      type="button" 
+                      (click)="productForm.patchValue({image_url: ''})"
+                      class="w-full mt-2 text-[10px] font-bold text-red-500 uppercase tracking-wider hover:text-red-600 transition-colors"
+                    >
+                      Remover Foto
+                    </button>
+                  }
                 </div>
-                <div>
-                  <label for="prod-cost" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Preço Custo</label>
-                  <input id="prod-cost" type="number" formControlName="cost_price" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                </div>
-                <div>
-                  <label for="prod-sale" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Preço Venda</label>
-                  <input id="prod-sale" type="number" formControlName="sale_price" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                </div>
-                <div>
-                  <label for="prod-stock" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Qtd. Estoque</label>
-                  <input id="prod-stock" type="number" formControlName="stock_quantity" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
-                </div>
-                <div>
-                  <label for="prod-min" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Estoque Mínimo</label>
-                  <input id="prod-min" type="number" formControlName="min_stock" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+
+                <!-- Form Fields -->
+                <div class="col-span-2 grid grid-cols-2 gap-4">
+                  <div class="col-span-2">
+                    <label for="prod-name" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Nome do Produto</label>
+                    <input id="prod-name" type="text" formControlName="name" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
+                  <div>
+                    <label for="prod-barcode" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Código de Barras</label>
+                    <input id="prod-barcode" type="text" formControlName="barcode" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
+                  <div>
+                    <label for="prod-category" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Categoria</label>
+                    <select id="prod-category" formControlName="category_id" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                      <option value="">Selecione...</option>
+                      @for (cat of categories(); track cat.id) {
+                        <option [value]="cat.id">{{ cat.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div>
+                    <label for="prod-cost" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Preço Custo</label>
+                    <input id="prod-cost" type="number" formControlName="cost_price" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
+                  <div>
+                    <label for="prod-sale" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Preço Venda</label>
+                    <input id="prod-sale" type="number" formControlName="sale_price" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
+                  <div>
+                    <label for="prod-stock" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Qtd. Estoque</label>
+                    <input id="prod-stock" type="number" formControlName="stock_quantity" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
+                  <div>
+                    <label for="prod-min" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5">Estoque Mínimo</label>
+                    <input id="prod-min" type="number" formControlName="min_stock" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 focus:border-black outline-none">
+                  </div>
                 </div>
               </div>
 
@@ -180,11 +217,24 @@ export class Inventory implements OnInit {
     sale_price: [0, Validators.required],
     stock_quantity: [0, Validators.required],
     min_stock: [5, Validators.required],
-    supplier_id: ['']
+    supplier_id: [''],
+    image_url: ['']
   });
 
   async ngOnInit() {
     this.loadData();
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = (e: ProgressEvent<FileReader>) => {
+        this.productForm.patchValue({ image_url: e.target?.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
   }
 
   async loadData() {

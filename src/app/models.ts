@@ -11,6 +11,7 @@ export interface Supplier {
   phone: string;
   email: string;
   address: string;
+  image_url?: string;
   created_at: string;
 }
 
@@ -21,6 +22,7 @@ export interface Customer {
   phone: string;
   email: string;
   address: string;
+  image_url?: string;
   created_at: string;
 }
 
@@ -34,6 +36,7 @@ export interface Product {
   stock_quantity: number;
   min_stock: number;
   supplier_id: string;
+  image_url?: string;
   created_at: string;
   category?: Category;
   supplier?: Supplier;
@@ -58,6 +61,7 @@ export interface Sale {
   created_at: string;
   user_id: string;
   items?: SaleItem[];
+  customer?: Customer;
 }
 
 export interface SaleItem {

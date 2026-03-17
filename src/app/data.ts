@@ -185,7 +185,8 @@ export class DataService {
       ...sale,
       id: Math.random().toString(36).substr(2, 9),
       user_id: 'mock-user',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      items: items as SaleItem[]
     } as Sale;
     
     this.mockSales.push(newSale);
@@ -204,6 +205,17 @@ export class DataService {
 
   async getSalesBySession(sessionId: string) {
     return this.mockSales.filter(s => s.cashier_session_id === sessionId);
+  }
+
+  async getAllSales() {
+    return this.mockSales.map(s => ({
+      ...s,
+      customer: this.mockCustomers.find(c => c.id === s.customer_id),
+      items: s.items?.map(item => ({
+        ...item,
+        product: this.mockProducts.find(p => p.id === item.product_id)
+      }))
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   // Financial

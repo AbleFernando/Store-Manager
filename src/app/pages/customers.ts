@@ -44,8 +44,12 @@ import { FormsModule } from '@angular/forms';
         @for (c of filteredCustomers(); track c.id) {
           <div class="bg-white p-6 rounded-3xl border border-black/5 shadow-sm hover:shadow-md transition-all group relative">
             <div class="flex items-start justify-between mb-4">
-              <div class="w-12 h-12 bg-black/5 rounded-2xl flex items-center justify-center">
-                <lucide-icon name="user" class="w-6 h-6 opacity-30"></lucide-icon>
+              <div class="w-12 h-12 bg-black/5 rounded-2xl flex items-center justify-center overflow-hidden">
+                @if (c.image_url) {
+                  <img [src]="c.image_url" [alt]="c.name" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                } @else {
+                  <lucide-icon name="user" class="w-6 h-6 opacity-30"></lucide-icon>
+                }
               </div>
               <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button (click)="editCustomer(c)" class="p-2 hover:bg-black/5 rounded-xl transition-colors text-black/50">
@@ -89,6 +93,37 @@ import { FormsModule } from '@angular/forms';
             </div>
             
             <div class="p-6 space-y-4">
+              <!-- Image Upload -->
+              <div class="flex justify-center mb-4">
+                <div class="relative group">
+                  <button 
+                    type="button"
+                    (click)="fileInput.click()"
+                    class="w-24 h-24 rounded-3xl bg-black/5 border-2 border-dashed border-black/10 hover:border-black/20 transition-all overflow-hidden flex flex-col items-center justify-center group"
+                  >
+                    @if (newCustomer.image_url) {
+                      <img [src]="newCustomer.image_url" alt="Preview do cliente" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <lucide-icon name="camera" class="text-white w-5 h-5"></lucide-icon>
+                      </div>
+                    } @else {
+                      <lucide-icon name="camera" class="w-6 h-6 text-black/20 mb-1"></lucide-icon>
+                      <span class="text-[8px] font-bold text-black/40 uppercase tracking-wider">Foto</span>
+                    }
+                  </button>
+                  @if (newCustomer.image_url) {
+                    <button 
+                      type="button" 
+                      (click)="newCustomer.image_url = ''"
+                      class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
+                    >
+                      <lucide-icon name="x" class="w-3 h-3"></lucide-icon>
+                    </button>
+                  }
+                  <input #fileInput type="file" class="hidden" accept="image/*" (change)="onFileSelected($event)">
+                </div>
+              </div>
+
               <div>
                 <label for="name" class="block text-xs font-bold uppercase tracking-wider text-black/50 mb-1.5 ml-1">Nome Completo</label>
                 <input id="name" type="text" [(ngModel)]="newCustomer.name" class="w-full px-4 py-3 rounded-xl bg-[#F9F9F9] border border-black/5 outline-none focus:border-black">
@@ -163,6 +198,18 @@ export class Customers implements OnInit {
         c.phone.includes(query)
       )
     );
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = (e: ProgressEvent<FileReader>) => {
+        this.newCustomer.image_url = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
   }
 
   editCustomer(customer: Customer) {

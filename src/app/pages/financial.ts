@@ -2,7 +2,7 @@ import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
 import { DataService } from '../data';
-import { FinancialTransaction, CashierSession } from '../models';
+import { FinancialTransaction, CashierSession, Sale } from '../models';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -61,10 +61,17 @@ import { FormsModule } from '@angular/forms';
       <!-- Transactions List -->
       <div class="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
         <div class="p-6 border-b border-black/5 flex justify-between items-center">
-          <h3 class="font-bold">Últimas Transações</h3>
+          <h3 class="font-bold">
+            @switch (view()) {
+              @case ('transactions') { Últimas Transações }
+              @case ('sessions') { Sessões de Caixa }
+              @case ('sales') { Fluxo de Vendas }
+            }
+          </h3>
           <div class="flex gap-2">
             <button (click)="view.set('transactions')" [class.bg-black]="view() === 'transactions'" [class.text-white]="view() === 'transactions'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border border-black/5">Transações</button>
-            <button (click)="view.set('sessions')" [class.bg-black]="view() === 'sessions'" [class.text-white]="view() === 'sessions'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border border-black/5">Sessões de Caixa</button>
+            <button (click)="view.set('sales')" [class.bg-black]="view() === 'sales'" [class.text-white]="view() === 'sales'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border border-black/5">Vendas</button>
+            <button (click)="view.set('sessions')" [class.bg-black]="view() === 'sessions'" [class.text-white]="view() === 'sessions'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all border border-black/5">Sessões</button>
           </div>
         </div>
 
@@ -99,6 +106,48 @@ import { FormsModule } from '@angular/forms';
                 @if (transactions().length === 0) {
                   <tr>
                     <td colspan="4" class="px-6 py-12 text-center text-black/30 font-medium">Nenhuma transação registrada</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else if (view() === 'sales') {
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-[#F9F9F9] text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  <th class="px-6 py-4">Data/Hora</th>
+                  <th class="px-6 py-4">Cliente</th>
+                  <th class="px-6 py-4">Pagamento</th>
+                  <th class="px-6 py-4">Itens</th>
+                  <th class="px-6 py-4 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-black/5">
+                @for (s of sales(); track s.id) {
+                  <tr class="hover:bg-black/[0.02] transition-colors">
+                    <td class="px-6 py-4 text-sm font-medium">{{ s.created_at | date:'dd/MM HH:mm' }}</td>
+                    <td class="px-6 py-4 text-sm font-bold">{{ s.customer?.name || 'Consumidor' }}</td>
+                    <td class="px-6 py-4">
+                      <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-black/5 text-black/50">
+                        {{ s.payment_method }}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4">
+                      <div class="flex flex-col gap-1">
+                        @for (item of s.items; track item.id) {
+                          <span class="text-[10px] text-black/60">{{ item.quantity }}x {{ item.product?.name }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-right font-black text-sm">
+                      R$ {{ s.total_amount | number:'1.2-2' }}
+                    </td>
+                  </tr>
+                }
+                @if (sales().length === 0) {
+                  <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-black/30 font-medium">Nenhuma venda registrada</td>
                   </tr>
                 }
               </tbody>
@@ -217,7 +266,8 @@ export class Financial implements OnInit {
 
   transactions = signal<FinancialTransaction[]>([]);
   sessions = signal<CashierSession[]>([]);
-  view = signal<'transactions' | 'sessions'>('transactions');
+  sales = signal<Sale[]>([]);
+  view = signal<'transactions' | 'sessions' | 'sales'>('transactions');
   showAddModal = false;
 
   newTransaction: Partial<FinancialTransaction> = {
@@ -230,6 +280,7 @@ export class Financial implements OnInit {
   async ngOnInit() {
     this.loadTransactions();
     this.loadSessions();
+    this.loadSales();
   }
 
   async loadTransactions() {
@@ -240,6 +291,11 @@ export class Financial implements OnInit {
   async loadSessions() {
     const s = await this.dataService.getSessions();
     this.sessions.set(s.sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()));
+  }
+
+  async loadSales() {
+    const s = await this.dataService.getAllSales();
+    this.sales.set(s);
   }
 
   totalIncome() {

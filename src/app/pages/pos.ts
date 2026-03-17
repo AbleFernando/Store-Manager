@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, HostListener } from '@angular/core';
+import { Component, inject, signal, OnInit, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
 import { DataService } from '../data';
@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-pos',
+  standalone: true,
   imports: [CommonModule, LucideAngularModule, FormsModule],
   template: `
     <div class="h-[calc(100vh-120px)] flex gap-8">
@@ -17,10 +18,11 @@ import { FormsModule } from '@angular/forms';
           <div class="relative">
             <lucide-icon name="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-black/30"></lucide-icon>
             <input 
+              #searchInput
               type="text" 
               [(ngModel)]="searchQuery"
               (keyup.enter)="onSearch()"
-              placeholder="F1: Buscar produto por nome ou código..."
+              placeholder="F1: Escaneie o código de barras ou busque por nome..."
               class="w-full pl-12 pr-4 py-4 rounded-2xl bg-[#F9F9F9] border border-black/5 focus:border-black focus:ring-0 transition-all outline-none text-lg font-medium"
             >
           </div>
@@ -34,8 +36,12 @@ import { FormsModule } from '@angular/forms';
                 (click)="addToCart(product)"
                 class="bg-white p-4 rounded-3xl border border-black/5 shadow-sm hover:shadow-md hover:border-black/20 transition-all text-left group flex flex-col h-full"
               >
-                <div class="w-full aspect-square rounded-2xl bg-black/5 mb-4 flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                  <lucide-icon name="package" class="w-8 h-8 opacity-20"></lucide-icon>
+                <div class="w-full aspect-square rounded-2xl bg-black/5 mb-4 flex items-center justify-center group-hover:bg-black/10 transition-colors overflow-hidden">
+                  @if (product.image_url) {
+                    <img [src]="product.image_url" [alt]="product.name" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                  } @else {
+                    <lucide-icon name="package" class="w-8 h-8 opacity-20"></lucide-icon>
+                  }
                 </div>
                 <p class="text-sm font-bold line-clamp-2 flex-1">{{ product.name }}</p>
                 <div class="mt-4 flex items-center justify-between">
@@ -63,6 +69,13 @@ import { FormsModule } from '@angular/forms';
           <div class="flex-1 overflow-y-auto p-4 space-y-3">
             @for (item of cart(); track item.product.id) {
               <div class="flex items-center gap-3 p-3 rounded-2xl bg-[#F9F9F9] group">
+                <div class="w-10 h-10 rounded-lg bg-black/5 flex items-center justify-center shrink-0 overflow-hidden">
+                  @if (item.product.image_url) {
+                    <img [src]="item.product.image_url" [alt]="item.product.name" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                  } @else {
+                    <lucide-icon name="package" class="w-4 h-4 opacity-20"></lucide-icon>
+                  }
+                </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-bold truncate">{{ item.product.name }}</p>
                   <p class="text-xs text-black/40 font-medium">{{ item.quantity }}x R$ {{ item.product.sale_price | number:'1.2-2' }}</p>
@@ -164,6 +177,8 @@ import { FormsModule } from '@angular/forms';
 export class POS implements OnInit {
   private dataService = inject(DataService);
 
+  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
   searchQuery = '';
   products = signal<Product[]>([]);
   cart = signal<{ product: Product, quantity: number }[]>([]);
@@ -177,6 +192,8 @@ export class POS implements OnInit {
   async ngOnInit() {
     this.loadData();
     this.currentSession.set(await this.dataService.getCurrentSession());
+    // Auto focus search on init
+    setTimeout(() => this.searchInput?.nativeElement?.focus(), 500);
   }
 
   private showNotification(msg: string) {
@@ -191,7 +208,22 @@ export class POS implements OnInit {
   }
 
   onSearch() {
-    const query = this.searchQuery.toLowerCase();
+    const query = this.searchQuery.trim().toLowerCase();
+    if (!query) {
+      this.filteredProducts.set(this.products());
+      return;
+    }
+
+    // Check for exact barcode match (Barcode Scanner behavior)
+    const exactMatch = this.products().find(p => p.barcode.toLowerCase() === query);
+    if (exactMatch) {
+      this.addToCart(exactMatch);
+      this.searchQuery = '';
+      this.filteredProducts.set(this.products());
+      return;
+    }
+
+    // Otherwise just filter
     this.filteredProducts.set(
       this.products().filter(p => 
         p.name.toLowerCase().includes(query) || 
@@ -245,7 +277,7 @@ export class POS implements OnInit {
   handleKeyboardEvent(event: KeyboardEvent) {
     if (event.key === 'F1') {
       event.preventDefault();
-      // Focus search input
+      this.searchInput.nativeElement.focus();
     }
     if (event.key === 'F2' && this.cart().length > 0) {
       event.preventDefault();
