@@ -8,6 +8,7 @@ import { Cashier } from './pages/cashier';
 import { Financial } from './pages/financial';
 import { Customers } from './pages/customers';
 import { Suppliers } from './pages/suppliers';
+import { Settings } from './pages/settings';
 import { authGuard } from './auth.guard';
 
 export const routes: Routes = [
@@ -24,6 +25,7 @@ export const routes: Routes = [
       { path: 'financial', component: Financial },
       { path: 'customers', component: Customers },
       { path: 'suppliers', component: Suppliers },
+      { path: 'settings', component: Settings },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]
   },

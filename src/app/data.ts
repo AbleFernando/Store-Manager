@@ -1,6 +1,6 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { SupabaseService } from './supabase';
-import { Product, Category, Supplier, Customer, CashierSession, Sale, FinancialTransaction, SaleItem } from './models';
+import { Product, Category, Supplier, Customer, CashierSession, Sale, FinancialTransaction, SaleItem, User, SystemConfig, UserRole } from './models';
 
 @Injectable({
   providedIn: 'root'
@@ -8,7 +8,23 @@ import { Product, Category, Supplier, Customer, CashierSession, Sale, FinancialT
 export class DataService {
   private supabase = inject(SupabaseService);
 
+  // Auth State
+  currentUser = signal<User | null>(null);
+
   // Mock Data Storage
+  private mockUsers: User[] = [
+    { id: 'u1', name: 'Super Admin', email: 'super@admin.com', role: 'super_admin', created_at: new Date().toISOString() },
+    { id: 'u2', name: 'Admin User', email: 'admin@test.com', role: 'admin', created_at: new Date().toISOString() },
+    { id: 'u3', name: 'Supervisor User', email: 'supervisor@test.com', role: 'supervisor', created_at: new Date().toISOString() },
+    { id: 'u4', name: 'Seller User', email: 'seller@test.com', role: 'seller', created_at: new Date().toISOString() },
+  ];
+
+  private mockConfig: SystemConfig = {
+    system_name: 'ABLE Store Manager',
+    system_logo_url: '',
+    supabase_url: '',
+    supabase_anon_key: ''
+  };
   private mockCategories: Category[] = [
     { id: 'cat1', name: 'Capas', created_at: new Date().toISOString() },
     { id: 'cat2', name: 'Películas', created_at: new Date().toISOString() },
@@ -57,6 +73,15 @@ export class DataService {
 
     const savedSuppliers = localStorage.getItem('mock_suppliers');
     if (savedSuppliers) this.mockSuppliers = JSON.parse(savedSuppliers);
+
+    const savedUsers = localStorage.getItem('mock_users');
+    if (savedUsers) this.mockUsers = JSON.parse(savedUsers);
+
+    const savedConfig = localStorage.getItem('mock_config');
+    if (savedConfig) this.mockConfig = JSON.parse(savedConfig);
+
+    // Default current user for dev
+    this.currentUser.set(this.mockUsers[0]);
   }
 
   private persist() {
@@ -66,6 +91,8 @@ export class DataService {
     localStorage.setItem('mock_transactions', JSON.stringify(this.mockTransactions));
     localStorage.setItem('mock_customers', JSON.stringify(this.mockCustomers));
     localStorage.setItem('mock_suppliers', JSON.stringify(this.mockSuppliers));
+    localStorage.setItem('mock_users', JSON.stringify(this.mockUsers));
+    localStorage.setItem('mock_config', JSON.stringify(this.mockConfig));
   }
 
   // Products
@@ -158,7 +185,7 @@ export class DataService {
   async openCashier(openingBalance: number) {
     const newSession: CashierSession = {
       id: Math.random().toString(36).substr(2, 9),
-      user_id: 'mock-user',
+      user_id: this.currentUser()?.id || 'mock-user',
       opened_at: new Date().toISOString(),
       opening_balance: openingBalance,
       status: 'open'
@@ -184,7 +211,7 @@ export class DataService {
     const newSale: Sale = {
       ...sale,
       id: Math.random().toString(36).substr(2, 9),
-      user_id: 'mock-user',
+      user_id: this.currentUser()?.id || 'mock-user',
       created_at: new Date().toISOString(),
       items: items as SaleItem[]
     } as Sale;
@@ -234,5 +261,56 @@ export class DataService {
     this.mockTransactions.unshift(newTransaction);
     this.persist();
     return newTransaction;
+  }
+
+  // Users
+  async getUsers() {
+    return this.mockUsers;
+  }
+
+  async saveUser(user: Partial<User>) {
+    if (user.id) {
+      const index = this.mockUsers.findIndex(u => u.id === user.id);
+      if (index !== -1) {
+        this.mockUsers[index] = { ...this.mockUsers[index], ...user } as User;
+      }
+    } else {
+      const newUser = {
+        ...user,
+        id: Math.random().toString(36).substr(2, 9),
+        created_at: new Date().toISOString()
+      } as User;
+      this.mockUsers.push(newUser);
+    }
+    this.persist();
+    return user as User;
+  }
+
+  // Config
+  async getConfig() {
+    return this.mockConfig;
+  }
+
+  async saveConfig(config: SystemConfig) {
+    this.mockConfig = { ...config };
+    this.persist();
+    return this.mockConfig;
+  }
+
+  // Role Hierarchy
+  canManageRole(targetRole: UserRole): boolean {
+    const currentRole = this.currentUser()?.role;
+    if (currentRole === 'super_admin') return true;
+    if (currentRole === 'admin') return targetRole === 'supervisor' || targetRole === 'seller';
+    if (currentRole === 'supervisor') return targetRole === 'seller';
+    return false;
+  }
+
+  getAllowedRolesToAssign(): UserRole[] {
+    const currentRole = this.currentUser()?.role;
+    if (currentRole === 'super_admin') return ['super_admin', 'admin', 'supervisor', 'seller'];
+    if (currentRole === 'admin') return ['supervisor', 'seller'];
+    if (currentRole === 'supervisor') return ['seller'];
+    return [];
   }
 }

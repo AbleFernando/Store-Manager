@@ -1,22 +1,29 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SupabaseService } from '../supabase';
 import { LucideAngularModule } from 'lucide-angular';
+import { DataService } from '../data';
+import { SystemConfig } from '../models';
 
 @Component({
   selector: 'app-login',
+  standalone: true,
   imports: [CommonModule, ReactiveFormsModule, LucideAngularModule],
   template: `
     <div class="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-6 font-sans">
       <div class="w-full max-w-md">
         <div class="bg-white rounded-3xl shadow-xl shadow-black/5 p-8 border border-black/5">
           <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <lucide-icon name="shopping-cart" class="text-white w-8 h-8"></lucide-icon>
+            <div class="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden">
+              @if (config()?.system_logo_url) {
+                <img [src]="config()?.system_logo_url" alt="Logo" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+              } @else {
+                <lucide-icon name="shopping-cart" class="text-white w-8 h-8"></lucide-icon>
+              }
             </div>
-            <h1 class="text-2xl font-bold tracking-tight text-[#1A1A1A]">CellStore Manager</h1>
+            <h1 class="text-2xl font-bold tracking-tight text-[#1A1A1A]">{{ config()?.system_name || 'Store Manager' }}</h1>
             <p class="text-black/50 text-sm mt-1">Entre com suas credenciais para acessar o sistema</p>
           </div>
 
@@ -66,18 +73,25 @@ import { LucideAngularModule } from 'lucide-angular';
     </div>
   `
 })
-export class Login {
+export class Login implements OnInit {
   private fb = inject(FormBuilder);
   private supabase = inject(SupabaseService);
   private router = inject(Router);
+  private dataService = inject(DataService);
 
   loading = signal(false);
   error = signal<string | null>(null);
+  config = signal<SystemConfig | null>(null);
 
   loginForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(6)]]
   });
+
+  async ngOnInit() {
+    const c = await this.dataService.getConfig();
+    this.config.set(c);
+  }
 
   async onSubmit() {
     if (this.loginForm.invalid) return;
@@ -88,25 +102,23 @@ export class Login {
     const { email, password } = this.loginForm.value;
 
     try {
-      // Mock login for development
-      if (email === 'admin@cellstore.com' && password === '123456') {
-        localStorage.setItem('mock_user', JSON.stringify({ email, id: 'mock-user', role: 'admin' }));
-        this.router.navigate(['/dashboard']);
+      // Mock login for development using DataService users
+      const users = await this.dataService.getUsers();
+      const user = users.find(u => u.email === email);
+
+      if (user && password === '123456') {
+        this.dataService.currentUser.set(user);
+        localStorage.setItem('mock_user', JSON.stringify(user));
+        
+        if (user.role === 'seller') {
+          this.router.navigate(['/pos']);
+        } else {
+          this.router.navigate(['/dashboard']);
+        }
         return;
       }
 
-      if (email === 'vendedor@cellstore.com' && password === '123456') {
-        localStorage.setItem('mock_user', JSON.stringify({ email, id: 'mock-seller', role: 'seller' }));
-        this.router.navigate(['/pos']);
-        return;
-      }
-
-      if (email === 'supervisor@cellstore.com' && password === '123456') {
-        localStorage.setItem('mock_user', JSON.stringify({ email, id: 'mock-supervisor', role: 'supervisor' }));
-        this.router.navigate(['/dashboard']);
-        return;
-      }
-
+      // Fallback to Supabase if not a mock user
       const { error } = await this.supabase.auth.signInWithPassword({
         email: email!,
         password: password!
@@ -116,14 +128,8 @@ export class Login {
 
       this.router.navigate(['/dashboard']);
     } catch (err: unknown) {
-      // If Supabase fails (e.g. invalid URL), we can still allow mock login
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer login';
-      if (email === 'admin@cellstore.com' && password === '123456') {
-        localStorage.setItem('mock_user', JSON.stringify({ email, id: 'mock-user' }));
-        this.router.navigate(['/dashboard']);
-      } else {
-        this.error.set(errorMessage);
-      }
+      this.error.set(errorMessage);
     } finally {
       this.loading.set(false);
     }

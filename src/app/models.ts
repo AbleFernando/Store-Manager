@@ -83,3 +83,21 @@ export interface FinancialTransaction {
   category: string;
   created_at: string;
 }
+
+export type UserRole = 'super_admin' | 'admin' | 'supervisor' | 'seller';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  password?: string;
+  created_at: string;
+}
+
+export interface SystemConfig {
+  system_name: string;
+  system_logo_url?: string;
+  supabase_url?: string;
+  supabase_anon_key?: string;
+}

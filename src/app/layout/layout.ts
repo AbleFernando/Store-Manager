@@ -1,12 +1,15 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { SupabaseService } from '../supabase';
 import { Router } from '@angular/router';
+import { DataService } from '../data';
+import { SystemConfig } from '../models';
 
 @Component({
   selector: 'app-layout',
+  standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule],
   template: `
     <div class="flex h-screen bg-[#F5F5F5] font-sans text-[#1A1A1A]">
@@ -20,10 +23,14 @@ import { Router } from '@angular/router';
           <!-- Logo -->
           <div class="p-6 border-b border-black/5">
             <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
-              <div class="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-                <lucide-icon name="shopping-cart" class="text-white w-5 h-5"></lucide-icon>
+              <div class="w-8 h-8 bg-black rounded-lg flex items-center justify-center overflow-hidden">
+                @if (config()?.system_logo_url) {
+                  <img [src]="config()?.system_logo_url" alt="Logo" class="w-full h-full object-cover" referrerpolicy="no-referrer">
+                } @else {
+                  <lucide-icon name="shopping-cart" class="text-white w-5 h-5"></lucide-icon>
+                }
               </div>
-              CellStore
+              <span class="truncate">{{ config()?.system_name || 'Store Manager' }}</span>
             </h1>
           </div>
 
@@ -88,25 +95,33 @@ import { Router } from '@angular/router';
     :host { display: block; height: 100vh; }
   `]
 })
-export class Layout {
+export class Layout implements OnInit {
   isSidebarOpen = false;
   private supabase = inject(SupabaseService);
   private router = inject(Router);
+  private dataService = inject(DataService);
+
+  config = signal<SystemConfig | null>(null);
 
   navItems = [
-    { path: '/dashboard', icon: 'layout-dashboard', label: 'Dashboard', roles: ['admin', 'supervisor'] },
-    { path: '/pos', icon: 'shopping-cart', label: 'Frente de Caixa', roles: ['admin', 'supervisor', 'seller'] },
-    { path: '/inventory', icon: 'package', label: 'Estoque', roles: ['admin', 'supervisor'] },
-    { path: '/cashier', icon: 'wallet', label: 'Caixa', roles: ['admin', 'supervisor'] },
-    { path: '/financial', icon: 'dollar-sign', label: 'Financeiro', roles: ['admin'] },
-    { path: '/customers', icon: 'users', label: 'Clientes', roles: ['admin', 'supervisor', 'seller'] },
-    { path: '/suppliers', icon: 'truck', label: 'Fornecedores', roles: ['admin', 'supervisor'] },
+    { path: '/dashboard', icon: 'layout-dashboard', label: 'Dashboard', roles: ['super_admin', 'admin', 'supervisor'] },
+    { path: '/pos', icon: 'shopping-cart', label: 'Frente de Caixa', roles: ['super_admin', 'admin', 'supervisor', 'seller'] },
+    { path: '/inventory', icon: 'package', label: 'Estoque', roles: ['super_admin', 'admin', 'supervisor'] },
+    { path: '/cashier', icon: 'wallet', label: 'Caixa', roles: ['super_admin', 'admin', 'supervisor'] },
+    { path: '/financial', icon: 'dollar-sign', label: 'Financeiro', roles: ['super_admin', 'admin'] },
+    { path: '/customers', icon: 'users', label: 'Clientes', roles: ['super_admin', 'admin', 'supervisor', 'seller'] },
+    { path: '/suppliers', icon: 'truck', label: 'Fornecedores', roles: ['super_admin', 'admin', 'supervisor'] },
+    { path: '/settings', icon: 'settings', label: 'Configurações', roles: ['super_admin', 'admin', 'supervisor', 'seller'] },
   ];
 
+  async ngOnInit() {
+    const c = await this.dataService.getConfig();
+    this.config.set(c);
+  }
+
   filteredNavItems() {
-    const userStr = localStorage.getItem('mock_user');
-    if (!userStr) return [];
-    const user = JSON.parse(userStr);
+    const user = this.dataService.currentUser();
+    if (!user) return [];
     return this.navItems.filter(item => item.roles.includes(user.role));
   }
 

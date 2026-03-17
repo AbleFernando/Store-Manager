@@ -12,8 +12,8 @@ import { Product, Sale } from '../models';
       <!-- Header -->
       <div class="flex items-end justify-between">
         <div>
-          <h2 class="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p class="text-black/50">Visão geral da sua loja hoje</p>
+          <h2 class="text-3xl font-bold tracking-tight">Olá, {{ currentUser()?.name }}</h2>
+          <p class="text-black/50">Você está acessando como <span class="font-bold text-black">{{ currentUser()?.role }}</span></p>
         </div>
         <div class="text-right">
           <p class="text-xs font-bold uppercase tracking-widest text-black/30">Data Atual</p>
@@ -107,6 +107,7 @@ import { Product, Sale } from '../models';
 export class Dashboard implements OnInit {
   private dataService = inject(DataService);
   today = new Date();
+  currentUser = this.dataService.currentUser;
 
   stats = signal([
     { label: 'Vendas Hoje', value: 'R$ 0,00', icon: 'shopping-cart', trend: '+12%', trendClass: 'bg-green-100 text-green-600' },
