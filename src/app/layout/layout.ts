@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -107,6 +107,20 @@ export class Layout implements OnInit {
   currentSession = this.dataService.currentSessionSignal;
   sessionBalance = signal<number>(0);
 
+  constructor() {
+    // Reactively update balance when session changes
+    effect(async () => {
+      const session = this.currentSession();
+      if (session) {
+        const sales = await this.dataService.getSalesBySession(session.id);
+        const total = sales.reduce((acc, s) => acc + s.total_amount, 0);
+        this.sessionBalance.set(session.opening_balance + total);
+      } else {
+        this.sessionBalance.set(0);
+      }
+    });
+  }
+
   navItems = [
     { path: '/dashboard', icon: 'layout-dashboard', label: 'Dashboard', roles: ['super_admin', 'admin', 'supervisor'] },
     { path: '/pos', icon: 'shopping-cart', label: 'Frente de Caixa', roles: ['super_admin', 'admin', 'supervisor', 'seller'] },
@@ -121,18 +135,6 @@ export class Layout implements OnInit {
   async ngOnInit() {
     const c = await this.dataService.getConfig();
     this.config.set(c);
-    
-    // Initial balance
-    const s = this.currentSession();
-    if (s) {
-      this.updateSessionBalance(s.id, s.opening_balance);
-    }
-  }
-
-  async updateSessionBalance(sessionId: string, opening: number) {
-    const sales = await this.dataService.getSalesBySession(sessionId);
-    const total = sales.reduce((acc, s) => acc + s.total_amount, 0);
-    this.sessionBalance.set(opening + total);
   }
 
   filteredNavItems() {

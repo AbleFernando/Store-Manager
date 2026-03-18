@@ -128,8 +128,9 @@ export class Dashboard implements OnInit {
       const allSales = await this.dataService.getAllSales();
       
       // Daily Sales
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todaySales = allSales.filter(s => s.created_at.startsWith(todayStr));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todaySales = allSales.filter(s => new Date(s.created_at) >= today);
       const totalDailySales = todaySales.reduce((acc, s) => acc + s.total_amount, 0);
       
       // Recent Sales

@@ -12,11 +12,20 @@ export class SupabaseService {
   private supabase: SupabaseClient;
 
   constructor() {
-    // Fallback to placeholders if not defined yet
     const url = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
     const key = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
     
-    this.supabase = createClient(url, key);
+    if (!url || !key || url.includes('YOUR_SUPABASE_URL')) {
+      console.warn('Supabase não configurado. Verifique os Secrets SUPABASE_URL e SUPABASE_KEY.');
+    }
+
+    this.supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder');
+  }
+
+  get isConfigured() {
+    const url = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
+    const key = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
+    return url !== '' && !url.includes('YOUR_SUPABASE_URL') && key !== '';
   }
 
   get client() {

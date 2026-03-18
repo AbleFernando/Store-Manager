@@ -81,12 +81,33 @@ export class DataService {
     const savedConfig = localStorage.getItem('mock_config');
     if (savedConfig) this.mockConfig = JSON.parse(savedConfig);
 
-    // Initial session state
-    const openSession = this.mockSessions.find(s => s.status === 'open') || null;
-    this.currentSessionSignal.set(openSession);
+    this.init();
+  }
 
-    // Default current user for dev
-    this.currentUser.set(this.mockUsers[0]);
+  async init() {
+    if (this.supabase.isConfigured) {
+      const session = await this.getCurrentSession();
+      this.currentSessionSignal.set(session);
+      
+      const { data: { user } } = await this.supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await this.supabase.client
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (profile) {
+          this.currentUser.set(profile);
+        }
+      }
+    } else {
+      // Initial session state
+      const openSession = this.mockSessions.find(s => s.status === 'open') || null;
+      this.currentSessionSignal.set(openSession);
+
+      // Default current user for dev
+      this.currentUser.set(this.mockUsers[0]);
+    }
   }
 
   private persist() {
@@ -102,6 +123,29 @@ export class DataService {
 
   // Products
   async getProducts() {
+    if (this.supabase.isConfigured) {
+      try {
+        const { data, error } = await this.supabase.client
+          .from('products')
+          .select('*, categories(id, name), suppliers(id, name)');
+        if (error) {
+          console.error('Supabase error fetching products:', error);
+          return this.getMockProducts();
+        }
+        return data.map(p => ({
+          ...p,
+          category: p.categories,
+          supplier: p.suppliers
+        }));
+      } catch (e) {
+        console.error('Failed to fetch products from Supabase:', e);
+        return this.getMockProducts();
+      }
+    }
+    return this.getMockProducts();
+  }
+
+  private getMockProducts() {
     return this.mockProducts.map(p => ({
       ...p,
       category: this.mockCategories.find(c => c.id === p.category_id),
@@ -110,6 +154,18 @@ export class DataService {
   }
 
   async saveProduct(product: Partial<Product>) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('products')
+        .upsert({
+          ...product,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
     if (product.id) {
       const index = this.mockProducts.findIndex(p => p.id === product.id);
       if (index !== -1) {
@@ -129,15 +185,38 @@ export class DataService {
 
   // Categories
   async getCategories() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('categories')
+        .select('*');
+      if (error) return [];
+      return data;
+    }
     return this.mockCategories;
   }
 
   // Suppliers
   async getSuppliers() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('suppliers')
+        .select('*');
+      if (error) return [];
+      return data;
+    }
     return this.mockSuppliers;
   }
 
   async saveSupplier(supplier: Partial<Supplier>) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('suppliers')
+        .upsert(supplier)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
     if (supplier.id) {
       const index = this.mockSuppliers.findIndex(s => s.id === supplier.id);
       if (index !== -1) {
@@ -157,10 +236,26 @@ export class DataService {
 
   // Customers
   async getCustomers() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('customers')
+        .select('*');
+      if (error) return [];
+      return data;
+    }
     return this.mockCustomers;
   }
 
   async saveCustomer(customer: Partial<Customer>) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('customers')
+        .upsert(customer)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
     if (customer.id) {
       const index = this.mockCustomers.findIndex(c => c.id === customer.id);
       if (index !== -1) {
@@ -180,14 +275,45 @@ export class DataService {
 
   // Cashier
   async getSessions() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('cashier_sessions')
+        .select('*')
+        .order('opened_at', { ascending: false });
+      if (error) return [];
+      return data;
+    }
     return this.mockSessions;
   }
 
   async getCurrentSession() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('cashier_sessions')
+        .select('*')
+        .eq('status', 'open')
+        .single();
+      if (error) return null;
+      return data;
+    }
     return this.mockSessions.find(s => s.status === 'open') || null;
   }
 
   async openCashier(openingBalance: number) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('cashier_sessions')
+        .insert({
+          user_id: this.currentUser()?.id,
+          opening_balance: openingBalance,
+          status: 'open'
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      this.currentSessionSignal.set(data);
+      return data;
+    }
     const newSession: CashierSession = {
       id: Math.random().toString(36).substr(2, 9),
       user_id: this.currentUser()?.id || 'mock-user',
@@ -202,6 +328,35 @@ export class DataService {
   }
 
   async closeCashier(sessionId: string, closingBalance: number) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('cashier_sessions')
+        .update({
+          closing_balance: closingBalance,
+          closed_at: new Date().toISOString(),
+          status: 'closed'
+        })
+        .eq('id', sessionId)
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Create income transaction for the sales in this session
+      const sales = await this.getSalesBySession(sessionId);
+      const totalSales = sales.reduce((acc, s) => acc + s.total_amount, 0);
+      
+      if (totalSales > 0) {
+        await this.saveTransaction({
+          type: 'income',
+          description: `Fechamento de Caixa - Sessão ${sessionId.slice(0, 8)}`,
+          amount: totalSales,
+          category: 'Vendas'
+        });
+      }
+
+      this.currentSessionSignal.set(null);
+      return data;
+    }
     const session = this.mockSessions.find(s => s.id === sessionId);
     if (session) {
       session.status = 'closed';
@@ -229,6 +384,39 @@ export class DataService {
 
   // Sales
   async createSale(sale: Partial<Sale>, items: Partial<SaleItem>[]) {
+    if (this.supabase.isConfigured) {
+      const { data: saleData, error: saleError } = await this.supabase.client
+        .from('sales')
+        .insert({
+          ...sale,
+          user_id: this.currentUser()?.id
+        })
+        .select()
+        .single();
+      if (saleError) throw saleError;
+
+      const itemsWithSaleId = items.map(item => ({
+        ...item,
+        sale_id: saleData.id
+      }));
+
+      const { error: itemsError } = await this.supabase.client
+        .from('sale_items')
+        .insert(itemsWithSaleId);
+      if (itemsError) throw itemsError;
+
+      // Update Stock
+      for (const item of items) {
+        if (item.product_id && item.quantity) {
+          await this.supabase.client.rpc('decrement_stock', { 
+            p_id: item.product_id, 
+            p_qty: item.quantity 
+          });
+        }
+      }
+
+      return saleData;
+    }
     const newSale: Sale = {
       ...sale,
       id: Math.random().toString(36).substr(2, 9),
@@ -252,10 +440,34 @@ export class DataService {
   }
 
   async getSalesBySession(sessionId: string) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('sales')
+        .select('*')
+        .eq('cashier_session_id', sessionId);
+      if (error) return [];
+      return data;
+    }
     return this.mockSales.filter(s => s.cashier_session_id === sessionId);
   }
 
   async getAllSales() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('sales')
+        .select('*, customers(*), sale_items(*, products(*))')
+        .order('created_at', { ascending: false });
+      if (error) return [];
+      return data.map(s => ({
+        ...s,
+        customer: s.customers,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: s.sale_items?.map((item: any) => ({
+          ...item,
+          product: item.products
+        }))
+      }));
+    }
     return this.mockSales.map(s => ({
       ...s,
       customer: this.mockCustomers.find(c => c.id === s.customer_id),
@@ -268,10 +480,27 @@ export class DataService {
 
   // Financial
   async getTransactions() {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('financial_transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) return [];
+      return data;
+    }
     return [...this.mockTransactions];
   }
 
   async saveTransaction(transaction: Partial<FinancialTransaction>) {
+    if (this.supabase.isConfigured) {
+      const { data, error } = await this.supabase.client
+        .from('financial_transactions')
+        .insert(transaction)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
     const newTransaction: FinancialTransaction = {
       status: 'paid',
       due_date: new Date().toISOString(),
@@ -283,6 +512,7 @@ export class DataService {
     this.persist();
     return newTransaction;
   }
+
 
   // Users
   async getUsers() {

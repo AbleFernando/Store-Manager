@@ -119,14 +119,31 @@ export class Login implements OnInit {
       }
 
       // Fallback to Supabase if not a mock user
-      const { error } = await this.supabase.auth.signInWithPassword({
+      const { data: authData, error } = await this.supabase.auth.signInWithPassword({
         email: email!,
         password: password!
       });
 
       if (error) throw error;
 
-      this.router.navigate(['/dashboard']);
+      if (authData.user) {
+        const { data: profile } = await this.supabase.client
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        
+        if (profile) {
+          this.dataService.currentUser.set(profile);
+          if (profile.role === 'seller') {
+            this.router.navigate(['/pos']);
+          } else {
+            this.router.navigate(['/dashboard']);
+          }
+        } else {
+          this.router.navigate(['/dashboard']);
+        }
+      }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer login';
       this.error.set(errorMessage);

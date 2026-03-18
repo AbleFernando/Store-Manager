@@ -1,73 +1,147 @@
-# Database Schema for CellStore Manager (Supabase)
+-- Habilita extensões necessárias
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-## Tables
+-- Categorias
+CREATE TABLE categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### categories
-- id: uuid (primary key)
-- name: text
-- created_at: timestamp
+-- Fornecedores
+CREATE TABLE suppliers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  cnpj TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### suppliers
-- id: uuid (primary key)
-- name: text
-- cnpj: text
-- phone: text
-- email: text
-- address: text
-- created_at: timestamp
+-- Clientes
+CREATE TABLE customers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  cpf_cnpj TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### customers
-- id: uuid (primary key)
-- name: text
-- cpf_cnpj: text
-- phone: text
-- email: text
-- address: text
-- created_at: timestamp
+-- Produtos
+CREATE TABLE products (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  barcode TEXT UNIQUE,
+  category_id UUID REFERENCES categories(id),
+  cost_price DECIMAL(10,2) NOT NULL,
+  sale_price DECIMAL(10,2) NOT NULL,
+  stock_quantity INTEGER DEFAULT 0,
+  min_stock INTEGER DEFAULT 0,
+  supplier_id UUID REFERENCES suppliers(id),
+  image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### products
-- id: uuid (primary key)
-- name: text
-- barcode: text
-- category_id: uuid (references categories)
-- cost_price: numeric
-- sale_price: numeric
-- stock_quantity: integer
-- min_stock: integer
-- supplier_id: uuid (references suppliers)
-- created_at: timestamp
+-- Sessões de Caixa
+CREATE TABLE cashier_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID, -- Referência ao auth.users do Supabase
+  opened_at TIMESTAMPTZ DEFAULT NOW(),
+  closed_at TIMESTAMPTZ,
+  opening_balance DECIMAL(10,2) NOT NULL,
+  closing_balance DECIMAL(10,2),
+  status TEXT CHECK (status IN ('open', 'closed')) DEFAULT 'open'
+);
 
-### cashier_sessions
-- id: uuid (primary key)
-- user_id: uuid (references auth.users)
-- opened_at: timestamp
-- closed_at: timestamp
-- opening_balance: numeric
-- closing_balance: numeric
-- status: text (open, closed)
+-- Vendas
+CREATE TABLE sales (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  cashier_session_id UUID REFERENCES cashier_sessions(id),
+  customer_id UUID REFERENCES customers(id),
+  total_amount DECIMAL(10,2) NOT NULL,
+  payment_method TEXT CHECK (payment_method IN ('cash', 'card', 'pix')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  user_id UUID
+);
 
-### sales
-- id: uuid (primary key)
-- cashier_session_id: uuid (references cashier_sessions)
-- customer_id: uuid (references customers)
-- total_amount: numeric
-- payment_method: text (cash, card, pix)
-- created_at: timestamp
-- user_id: uuid (references auth.users)
+-- Itens da Venda
+CREATE TABLE sale_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sale_id UUID REFERENCES sales(id) ON DELETE CASCADE,
+  product_id UUID REFERENCES products(id),
+  quantity INTEGER NOT NULL,
+  unit_price DECIMAL(10,2) NOT NULL
+);
 
-### sale_items
-- id: uuid (primary key)
-- sale_id: uuid (references sales)
-- product_id: uuid (references products)
-- quantity: integer
-- unit_price: numeric
+-- Transações Financeiras
+CREATE TABLE financial_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  type TEXT CHECK (type IN ('income', 'expense')),
+  description TEXT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  due_date TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT CHECK (status IN ('pending', 'paid')) DEFAULT 'paid',
+  category TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### financial_transactions
-- id: uuid (primary key)
-- type: text (income, expense)
-- description: text
-- amount: numeric
-- due_date: date
-- status: text (pending, paid)
-- category: text
-- created_at: timestamp
+-- Configurações do Sistema
+CREATE TABLE system_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  system_name TEXT DEFAULT 'Store Manager',
+  system_logo_url TEXT,
+  supabase_url TEXT,
+  supabase_anon_key TEXT,
+  CONSTRAINT single_row CHECK (id = 1)
+);
+
+-- Perfis de Usuário (Extensão do auth.users)
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  role TEXT CHECK (role IN ('super_admin', 'admin', 'supervisor', 'seller')) DEFAULT 'seller',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Dados Iniciais para Teste
+INSERT INTO categories (name) VALUES ('Capas'), ('Películas'), ('Carregadores'), ('Fones de Ouvido');
+
+INSERT INTO system_config (system_name) VALUES ('ABLE Store Manager');
+
+-- Criar um usuário padrão no Auth (Senha: password123)
+-- Nota: O ID do usuário deve ser o mesmo na tabela profiles
+INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated',
+  'authenticated',
+  'admin@able.com',
+  crypt('password123', gen_salt('bf')),
+  now(),
+  '{"provider":"email","providers":["email"]}',
+  '{"name":"Administrador"}',
+  now(),
+  now()
+) ON CONFLICT (id) DO NOTHING;
+
+-- Criar o perfil correspondente
+INSERT INTO public.profiles (id, name, role)
+VALUES ('00000000-0000-0000-0000-000000000000', 'Administrador Able', 'super_admin')
+ON CONFLICT (id) DO NOTHING;
+
+-- Função para decrementar o estoque (RPC)
+CREATE OR REPLACE FUNCTION decrement_stock(p_id UUID, p_qty INTEGER)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE products
+  SET stock_quantity = stock_quantity - p_qty
+  WHERE id = p_id;
+END;
+$$ LANGUAGE plpgsql;
+
