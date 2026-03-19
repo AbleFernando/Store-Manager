@@ -15,17 +15,25 @@ export class SupabaseService {
     const url = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
     const key = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
     
+    console.log('SupabaseService: Inicializando...');
+    console.log('SupabaseService: URL detectada:', url || 'NENHUMA (Usando fallback)');
+    console.log('SupabaseService: Key detectada:', key ? 'SIM (presente)' : 'NÃO (vazia)');
+    
     if (!url || !key || url.includes('YOUR_SUPABASE_URL')) {
-      console.warn('Supabase não configurado. Verifique os Secrets SUPABASE_URL e SUPABASE_KEY.');
+      console.warn('Supabase não configurado corretamente nos Secrets do AI Studio. O login real irá falhar.');
     }
 
-    this.supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder');
+    // Clean URL to avoid double slashes or trailing slashes issues
+    const cleanUrl = url ? url.replace(/\/$/, '') : 'https://dev-storage-manager.able.tec.br';
+    console.log('SupabaseService: Usando URL final:', cleanUrl);
+    
+    this.supabase = createClient(cleanUrl, key || 'placeholder');
   }
 
   get isConfigured() {
-    const url = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
     const key = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
-    return url !== '' && !url.includes('YOUR_SUPABASE_URL') && key !== '';
+    // We always have a URL (either from Secret or fallback), so we just need the key
+    return key !== '' && key !== 'placeholder';
   }
 
   get client() {
